@@ -9,8 +9,11 @@
 .wrap{width:min(720px,94vw);text-align:center}.hud{display:flex;justify-content:space-between;gap:12px;margin-bottom:12px}.box{background:#18243a;border-radius:12px;padding:10px 16px;flex:1}
 canvas{width:100%;max-width:720px;aspect-ratio:16/10;background:#0b1220;border-radius:16px;display:block;touch-action:none}
 button{margin-top:14px;padding:12px 22px;border:0;border-radius:10px;font-weight:700;cursor:pointer}
+button:disabled {opacity: 0.5; cursor: not-allowed;}
 small{display:block;color:#aebbd0;margin-top:10px}
 </style>
+<!-- Thêm thư viện Facebook Instant Games SDK -->
+<script src="https://connect.facebook.net/en_US/fbinstant.6.3.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -21,57 +24,79 @@ small{display:block;color:#aebbd0;margin-top:10px}
     <div class="box">Best: <b id="best">0</b></div>
   </div>
   <canvas id="game" width="720" height="450" aria-label="Coin Catcher game"></canvas>
-  <button id="restart" type="button">Start / Restart</button>
+  <button id="restart" type="button" disabled>Loading SDK...</button>
   <small>Move the basket with ← → or drag/touch. Catch coins, avoid bombs.</small>
 </div>
 <script>
-(() => {
-  const canvas=document.getElementById('game'), ctx=canvas.getContext('2d');
-  const scoreEl=document.getElementById('score'), livesEl=document.getElementById('lives'), bestEl=document.getElementById('best');
-  const restart=document.getElementById('restart');
-  let score=0,lives=3,running=false,last=0,raf=0,spawn=0,items=[],keys={};
-  let best=Number(localStorage.getItem('coinCatcherBest')||0); bestEl.textContent=best;
-  const basket={x:310,y:400,w:100,h:22,speed:430};
+// Khởi tạo SDK Facebook Instant Games
+FBInstant.initializeAsync().then(function() {
+  // Báo cáo tải xong (vì game nhẹ không có hình ảnh/âm thanh ngoài nên báo 100% luôn)
+  FBInstant.setLoadingProgress(100);
+  
+  // Bắt đầu game
+  FBInstant.startGameAsync().then(function() {
+    
+    // Đã tải xong, mở khóa nút bấm
+    const restartBtn = document.getElementById('restart');
+    restartBtn.disabled = false;
+    restartBtn.textContent = 'Start / Restart';
 
-  function reset(){score=0;lives=3;items=[];spawn=0;basket.x=310;running=true;last=performance.now();updateHud();cancelAnimationFrame(raf);raf=requestAnimationFrame(loop)}
-  function updateHud(){scoreEl.textContent=score;livesEl.textContent=lives;bestEl.textContent=best}
-  function spawnItem(){
-    const bomb=Math.random()<0.16;
-    items.push({x:25+Math.random()*670,y:-20,r:bomb?13:11,vy:130+Math.random()*100+score*1.8,bomb});
-  }
-  function draw(){
-    ctx.clearRect(0,0,720,450);
-    const g=ctx.createLinearGradient(0,0,0,450);g.addColorStop(0,'#16243b');g.addColorStop(1,'#08101d');ctx.fillStyle=g;ctx.fillRect(0,0,720,450);
-    ctx.fillStyle='#33445f';for(let x=0;x<720;x+=48)for(let y=0;y<450;y+=48)ctx.fillRect(x,y,1,1);
-    ctx.fillStyle='#6aa5ff';ctx.fillRect(basket.x,basket.y,basket.w,basket.h);ctx.fillStyle='#b9d5ff';ctx.fillRect(basket.x+15,basket.y-7,basket.w-30,7);
-    for(const it of items){ctx.beginPath();ctx.arc(it.x,it.y,it.r,0,Math.PI*2);ctx.fillStyle=it.bomb?'#ff6b6b':'#ffd166';ctx.fill();if(it.bomb){ctx.fillStyle='#161616';ctx.fillRect(it.x-3,it.y-3,6,6)}}
-    if(!running){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(0,0,720,450);ctx.fillStyle='#fff';ctx.font='bold 34px Arial';ctx.textAlign='center';ctx.fillText('Press Start to play',360,215);ctx.font='18px Arial';ctx.fillText('Catch coins • avoid bombs',360,250)}
-  }
-  function loop(t){
-    const dt=Math.min((t-last)/1000,.04);last=t;
-    if(running){
-      if(keys.ArrowLeft)basket.x-=basket.speed*dt;if(keys.ArrowRight)basket.x+=basket.speed*dt;
-      basket.x=Math.max(0,Math.min(720-basket.w,basket.x));
-      spawn+=dt;if(spawn>.65){spawn=0;spawnItem()}
-      for(let i=items.length-1;i>=0;i--){const it=items[i];it.y+=it.vy*dt;
-        if(it.y+it.r>=basket.y && it.y-it.r<=basket.y+basket.h && it.x>=basket.x && it.x<=basket.x+basket.w){
-          if(it.bomb){lives--; if(lives<=0){running=false;if(score>best){best=score;localStorage.setItem('coinCatcherBest',best)}}}
-          else score++;
-          items.splice(i);updateHud();continue;
-        }
-        if(it.y>470)items.splice(i);
+    // --- LOGIC GAME CỦA BẠN BẮT ĐẦU TỪ ĐÂY ---
+    (() => {
+      const canvas=document.getElementById('game'), ctx=canvas.getContext('2d');
+      const scoreEl=document.getElementById('score'), livesEl=document.getElementById('lives'), bestEl=document.getElementById('best');
+      const restart=document.getElementById('restart');
+      let score=0,lives=3,running=false,last=0,raf=0,spawn=0,items=[],keys={};
+      let best=Number(localStorage.getItem('coinCatcherBest')||0); bestEl.textContent=best;
+      const basket={x:310,y:400,w:100,h:22,speed:430};
+
+      function reset(){score=0;lives=3;items=[];spawn=0;basket.x=310;running=true;last=performance.now();updateHud();cancelAnimationFrame(raf);raf=requestAnimationFrame(loop)}
+      function updateHud(){scoreEl.textContent=score;livesEl.textContent=lives;bestEl.textContent=best}
+      function spawnItem(){
+        const bomb=Math.random()<0.16;
+        items.push({x:25+Math.random()*670,y:-20,r:bomb?13:11,vy:130+Math.random()*100+score*1.8,bomb});
       }
-    }
-    draw();raf=requestAnimationFrame(loop);
-  }
-  function pointerMove(e){const r=canvas.getBoundingClientRect();basket.x=((e.clientX-r.left)/r.width)*720-basket.w/2;basket.x=Math.max(0,Math.min(720-basket.w,basket.x))}
-  addEventListener('keydown',e=>{keys[e.key]=true;if(e.key==='Enter'&&!running)reset()});
-  addEventListener('keyup',e=>keys[e.key]=false);
-  canvas.addEventListener('pointermove',e=>{if(e.buttons)pointerMove(e)});
-  canvas.addEventListener('pointerdown',pointerMove);
-  restart.addEventListener('click',reset);
-  draw();
-})();
+      function draw(){
+        ctx.clearRect(0,0,720,450);
+        const g=ctx.createLinearGradient(0,0,0,450);g.addColorStop(0,'#16243b');g.addColorStop(1,'#08101d');ctx.fillStyle=g;ctx.fillRect(0,0,720,450);
+        ctx.fillStyle='#33445f';for(let x=0;x<720;x+=48)for(let y=0;y<450;y+=48)ctx.fillRect(x,y,1,1);
+        ctx.fillStyle='#6aa5ff';ctx.fillRect(basket.x,basket.y,basket.w,basket.h);ctx.fillStyle='#b9d5ff';ctx.fillRect(basket.x+15,basket.y-7,basket.w-30,7);
+        for(const it of items){ctx.beginPath();ctx.arc(it.x,it.y,it.r,0,Math.PI*2);ctx.fillStyle=it.bomb?'#ff6b6b':'#ffd166';ctx.fill();if(it.bomb){ctx.fillStyle='#161616';ctx.fillRect(it.x-3,it.y-3,6,6)}}
+        if(!running){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(0,0,720,450);ctx.fillStyle='#fff';ctx.font='bold 34px Arial';ctx.textAlign='center';ctx.fillText('Press Start to play',360,215);ctx.font='18px Arial';ctx.fillText('Catch coins • avoid bombs',360,250)}
+      }
+      function loop(t){
+        const dt=Math.min((t-last)/1000,.04);last=t;
+        if(running){
+          if(keys.ArrowLeft)basket.x-=basket.speed*dt;if(keys.ArrowRight)basket.x+=basket.speed*dt;
+          basket.x=Math.max(0,Math.min(720-basket.w,basket.x));
+          spawn+=dt;if(spawn>.65){spawn=0;spawnItem()}
+          for(let i=items.length-1;i>=0;i--){const it=items[i];it.y+=it.vy*dt;
+            if(it.y+it.r>=basket.y && it.y-it.r<=basket.y+basket.h && it.x>=basket.x && it.x<=basket.x+basket.w){
+              if(it.bomb){lives--; if(lives<=0){running=false;if(score>best){best=score;localStorage.setItem('coinCatcherBest',best)}}}
+              else score++;
+              items.splice(i);updateHud();continue;
+            }
+            if(it.y>470)items.splice(i);
+          }
+        }
+        draw();raf=requestAnimationFrame(loop);
+      }
+      function pointerMove(e){const r=canvas.getBoundingClientRect();basket.x=((e.clientX-r.left)/r.width)*720-basket.w/2;basket.x=Math.max(0,Math.min(720-basket.w,basket.x))}
+      addEventListener('keydown',e=>{keys[e.key]=true;if(e.key==='Enter'&&!running)reset()});
+      addEventListener('keyup',e=>keys[e.key]=false);
+      canvas.addEventListener('pointermove',e=>{if(e.buttons)pointerMove(e)});
+      canvas.addEventListener('pointerdown',pointerMove);
+      restart.addEventListener('click',reset);
+      draw();
+    })();
+    // --- HẾT LOGIC GAME ---
+
+  }).catch(function(err) {
+      console.error("Lỗi khi startGameAsync:", err);
+  });
+}).catch(function(err) {
+  console.error("Lỗi khi initializeAsync SDK:", err);
+});
 </script>
 </body>
 </html>
